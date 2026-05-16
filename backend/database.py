@@ -75,6 +75,57 @@ def migrate_db():
         ) AS v(name, name_kz, price, days_min, days_max)
         WHERE NOT EXISTS (SELECT 1 FROM delivery_services LIMIT 1)
         """,
+        """
+        CREATE TABLE IF NOT EXISTS wishlist_items (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, product_id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS cart_items (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(user_id, product_id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS promo_codes (
+            id SERIAL PRIMARY KEY,
+            code VARCHAR(50) UNIQUE NOT NULL,
+            discount_percent INTEGER NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            max_uses INTEGER,
+            used_count INTEGER NOT NULL DEFAULT 0,
+            expires_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL,
+            body VARCHAR(1000) NOT NULL,
+            type VARCHAR(50) NOT NULL DEFAULT 'info',
+            is_read BOOLEAN NOT NULL DEFAULT FALSE,
+            link VARCHAR(500),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        INSERT INTO promo_codes (code, discount_percent, is_active, max_uses)
+        SELECT * FROM (VALUES
+            ('QOLDA10', 10, TRUE, 100),
+            ('WELCOME15', 15, TRUE, 50),
+            ('SALE20', 20, TRUE, 30)
+        ) AS v(code, discount_percent, is_active, max_uses)
+        WHERE NOT EXISTS (SELECT 1 FROM promo_codes LIMIT 1)
+        """,
     ]
     with engine.connect() as conn:
         for stmt in stmts:

@@ -40,6 +40,20 @@ export interface ProductCreate {
   tags?: string
 }
 
+export interface ProductUpdate {
+  name_ru?: string
+  name_kz?: string
+  description_ru?: string
+  description_kz?: string
+  category?: string
+  subcategory?: string
+  price?: number
+  discount_price?: number
+  image_url?: string
+  stock?: number
+  tags?: string
+}
+
 export interface ProductList {
   items: Product[]
   total: number
@@ -144,6 +158,23 @@ export interface OrderStatusHistory {
   id: number
   status: string
   changed_at: string
+}
+
+export interface Notification {
+  id: number
+  title: string
+  body: string
+  type: string
+  is_read: boolean
+  link?: string
+  created_at: string
+}
+
+export interface PromoResult {
+  valid: boolean
+  discount_percent: number
+  discount_amount: number
+  message: string
 }
 
 export interface AdminStats {

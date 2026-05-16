@@ -1,16 +1,154 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Filter, Download, Lightbulb, TrendingUp, ShieldCheck, ShieldAlert, ShieldX, Loader2 } from 'lucide-react'
+import { Search, Filter, Download, Lightbulb, TrendingUp, ShieldCheck, ShieldAlert, ShieldX, Loader2, Pencil, X } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, ResponsiveContainer, Tooltip,
 } from 'recharts'
 import { productsApi } from '../../api/products'
 import { ordersApi } from '../../api/orders'
-import type { Product, SellerOrder, PlagiarismResult } from '../../api/types'
+import type { Product, SellerOrder, PlagiarismResult, ProductUpdate } from '../../api/types'
 import ProductImage from '../../components/ProductImage'
 import { confirm } from '../../components/ConfirmDialog'
 import { toast } from '../../store/toastStore'
 import { exportCsv } from '../../utils/exportCsv'
+
+const CATEGORIES = ['Electronics', 'Clothing', 'Books', 'Home', 'Sports']
+
+function EditModal({ product, onClose, onSave }: {
+  product: Product
+  onClose: () => void
+  onSave:  (updated: Product) => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState<ProductUpdate>({
+    name_ru:        product.name_ru,
+    name_kz:        product.name_kz,
+    description_ru: product.description_ru ?? '',
+    description_kz: product.description_kz ?? '',
+    category:       product.category,
+    subcategory:    product.subcategory ?? '',
+    price:          product.price,
+    discount_price: product.discount_price ?? undefined,
+    image_url:      product.image_url ?? '',
+    stock:          product.stock,
+    tags:           product.tags ?? '',
+  })
+
+  const set = (field: keyof ProductUpdate, value: string | number | undefined) =>
+    setForm(prev => ({ ...prev, [field]: value }))
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const updated = await productsApi.update(product.id, {
+        ...form,
+        description_ru: form.description_ru || undefined,
+        description_kz: form.description_kz || undefined,
+        subcategory:    form.subcategory    || undefined,
+        image_url:      form.image_url      || undefined,
+        tags:           form.tags           || undefined,
+        discount_price: form.discount_price ?? undefined,
+      })
+      onSave(updated)
+      toast.success('Товар обновлён')
+      onClose()
+    } catch {
+      toast.error('Не удалось сохранить изменения')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="font-bold text-gray-900">Редактировать товар</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Название (рус) *</label>
+              <input required className="input" value={form.name_ru} onChange={e => set('name_ru', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Атауы (қаз) *</label>
+              <input required className="input" value={form.name_kz} onChange={e => set('name_kz', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Категория</label>
+              <select className="input" value={form.category} onChange={e => set('category', e.target.value)}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Подкатегория</label>
+              <input className="input" value={form.subcategory} onChange={e => set('subcategory', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Цена (₸) *</label>
+              <input required type="number" min="1" className="input" value={form.price} onChange={e => set('price', parseFloat(e.target.value))} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Скидочная цена</label>
+              <input type="number" min="1" className="input" value={form.discount_price ?? ''} onChange={e => set('discount_price', e.target.value ? parseFloat(e.target.value) : undefined)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Остаток *</label>
+              <input required type="number" min="0" className="input" value={form.stock} onChange={e => set('stock', parseInt(e.target.value))} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Ссылка на фото</label>
+            <input type="url" className="input" value={form.image_url} onChange={e => set('image_url', e.target.value)} />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Теги</label>
+            <input className="input" value={form.tags} onChange={e => set('tags', e.target.value)} />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Описание (рус)</label>
+            <textarea className="input" rows={2} value={form.description_ru} onChange={e => set('description_ru', e.target.value)} />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 py-2.5 bg-[#004B57] hover:bg-[#003840] text-white font-semibold rounded-xl transition-colors disabled:opacity-60 text-sm"
+            >
+              {saving ? 'Сохранение...' : 'Сохранить изменения'}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-colors text-sm"
+            >
+              Отмена
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 function fmt(n: number) { return n.toLocaleString('ru-KZ') + ' ₸' }
 
@@ -93,6 +231,7 @@ export default function SellerProducts() {
   const [search, setSearch]             = useState('')
   const [plagResults, setPlagResults]   = useState<Record<number, PlagiarismResult>>({})
   const [checking, setChecking]         = useState<Set<number>>(new Set())
+  const [editProduct, setEditProduct]   = useState<Product | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -111,6 +250,10 @@ export default function SellerProducts() {
       setProducts(prev => prev.filter(p => p.id !== id))
       toast.success(`«${name}» удалён`)
     } catch { toast.error('Не удалось удалить товар') }
+  }
+
+  const handleSaveEdit = (updated: Product) => {
+    setProducts(prev => prev.map(p => p.id === updated.id ? updated : p))
   }
 
   const handleExport = () => {
@@ -297,13 +440,22 @@ export default function SellerProducts() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${st.cls}`}>
                         {st.label}
                       </span>
-                      <button
-                        onClick={() => handleDelete(p.id, p.name_ru)}
-                        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all text-sm ml-1"
-                        title="Удалить"
-                      >
-                        ✕
-                      </button>
+                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                        <button
+                          onClick={() => setEditProduct(p)}
+                          className="text-gray-300 hover:text-[#004B57] transition-colors"
+                          title="Редактировать"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id, p.name_ru)}
+                          className="text-gray-300 hover:text-red-500 transition-colors text-sm"
+                          title="Удалить"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -376,6 +528,14 @@ export default function SellerProducts() {
             )}
           </div>
         </div>
+      )}
+
+      {editProduct && (
+        <EditModal
+          product={editProduct}
+          onClose={() => setEditProduct(null)}
+          onSave={handleSaveEdit}
+        />
       )}
     </div>
   )

@@ -18,7 +18,10 @@ client.interceptors.response.use(
   err => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
-      // Let components handle redirect
+      localStorage.removeItem('qolda-user')
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   }

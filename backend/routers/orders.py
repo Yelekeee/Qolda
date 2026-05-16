@@ -1,13 +1,29 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 from database import get_db
-from models import DeliveryService, Order, OrderItem, OrderStatusHistory, Product, User
+from models import DeliveryService, Notification, Order, OrderItem, OrderStatusHistory, Product, User
 from schemas import OrderCreate, OrderOut, OrderItemOut, SellerOrderOut, OrderStatusUpdate, OrderStatusHistoryItem
 from auth import require_user, require_seller
+from routers.promo import validate_promo
 
 router = APIRouter()
+
+STATUS_LABELS = {
+    "processing": "Тапсырыс қабылданды / Заказ принят",
+    "pending":    "Күтілуде / Ожидает",
+    "shipped":    "Жолда / В пути",
+    "completed":  "Жеткізілді / Доставлен",
+    "cancelled":  "Бас тартылды / Отменён",
+    "returned":   "Қайтарылды / Возврат",
+}
+
+
+def _notify(db: Session, user_id: int, title: str, body: str, notif_type: str, link: str | None = None):
+    db.add(Notification(user_id=user_id, title=title, body=body, type=notif_type, link=link))
 
 
 @router.post("", response_model=OrderOut)
@@ -41,9 +57,24 @@ def create_order(
         if svc:
             delivery_cost = svc.price
 
+    subtotal = total + delivery_cost
+
+    # Apply promo code
+    discount = 0.0
+    if data.promo_code:
+        result = validate_promo(data.promo_code, subtotal, db)
+        if result.valid:
+            discount = result.discount_amount
+            from models import PromoCode
+            promo = db.query(PromoCode).filter(PromoCode.code == data.promo_code.upper()).first()
+            if promo:
+                promo.used_count += 1
+
+    final_total = round(max(0.0, subtotal - discount), 2)
+
     order = Order(
         user_id=current_user.id,
-        total_amount=round(total + delivery_cost, 2),
+        total_amount=final_total,
         status="processing",
         delivery_address=data.delivery_address,
         customer_name=data.customer_name or current_user.name,
@@ -65,6 +96,15 @@ def create_order(
         product.stock -= qty
 
     db.add(OrderStatusHistory(order_id=order.id, status="processing"))
+
+    _notify(
+        db, current_user.id,
+        title="Тапсырыс қабылданды!",
+        body=f"№{order.id} тапсырысыңыз өңделуде. Жалпы сомасы: {final_total:,.0f} ₸",
+        notif_type="order",
+        link="/orders",
+    )
+
     db.commit()
     db.refresh(order)
     return OrderOut.model_validate(order)
@@ -75,7 +115,6 @@ def get_seller_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_seller),
 ):
-    # Find all products belonging to this seller
     seller_product_ids = [
         p.id for p in db.query(Product).filter(Product.seller_id == current_user.id).all()
     ]
@@ -83,7 +122,6 @@ def get_seller_orders(
     if not seller_product_ids:
         return []
 
-    # Find orders that contain at least one seller product
     order_id_rows = (
         db.query(OrderItem.order_id)
         .filter(OrderItem.product_id.in_(seller_product_ids))
@@ -143,6 +181,16 @@ def update_order_status(
 
     order.status = data.status
     db.add(OrderStatusHistory(order_id=order.id, status=data.status))
+
+    label = STATUS_LABELS.get(data.status, data.status)
+    _notify(
+        db, order.user_id,
+        title="Тапсырыс мәртебесі өзгерді",
+        body=f"№{order.id} тапсырысыңыздың мәртебесі: {label}",
+        notif_type="order",
+        link="/orders",
+    )
+
     db.commit()
     db.refresh(order)
 
@@ -180,6 +228,35 @@ def cancel_order(
     return OrderOut.model_validate(order)
 
 
+@router.post("/{order_id}/return", response_model=OrderOut)
+def return_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if order.status != "completed":
+        raise HTTPException(status_code=400, detail="Only completed orders can be returned")
+    order.status = "returned"
+    db.add(OrderStatusHistory(order_id=order.id, status="returned"))
+
+    _notify(
+        db, current_user.id,
+        title="Қайтару сұратылды / Возврат запрошен",
+        body=f"№{order.id} тапсырысы бойынша қайтару сұратылды. Бізбен байланысыңыз.",
+        notif_type="order",
+        link="/orders",
+    )
+
+    db.commit()
+    db.refresh(order)
+    return OrderOut.model_validate(order)
+
+
 @router.get("/{order_id}/history", response_model=List[OrderStatusHistoryItem])
 def get_order_history(
     order_id: int,
@@ -197,6 +274,58 @@ def get_order_history(
         .order_by(OrderStatusHistory.changed_at)
         .all()
     )
+
+
+@router.get("/my-stats")
+def get_my_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    orders = (
+        db.query(Order)
+        .filter(Order.user_id == current_user.id, Order.status != "cancelled")
+        .all()
+    )
+
+    total_spent = sum(o.total_amount for o in orders)
+    total_orders = len(orders)
+    avg_order = round(total_spent / total_orders, 0) if total_orders else 0
+
+    month_map: dict = defaultdict(float)
+    cutoff = datetime.utcnow() - timedelta(days=180)
+    MONTHS_RU = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                 "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+    for o in orders:
+        if o.created_at >= cutoff:
+            key = (o.created_at.year, o.created_at.month)
+            month_map[key] += o.total_amount
+
+    by_month = []
+    for i in range(5, -1, -1):
+        dt = datetime.utcnow().replace(day=1) - timedelta(days=i * 30)
+        key = (dt.year, dt.month)
+        by_month.append({"name": MONTHS_RU[dt.month - 1], "spent": round(month_map.get(key, 0))})
+
+    cat_count: dict = defaultdict(int)
+    cat_spent: dict = defaultdict(float)
+    for o in orders:
+        for item in o.items:
+            if item.product:
+                cat_count[item.product.category] += item.quantity
+                cat_spent[item.product.category] += item.price * item.quantity
+
+    by_category = [
+        {"name": cat, "count": cat_count[cat], "spent": round(cat_spent[cat])}
+        for cat in sorted(cat_count, key=lambda c: cat_spent[c], reverse=True)
+    ]
+
+    return {
+        "total_orders": total_orders,
+        "total_spent": round(total_spent),
+        "avg_order": int(avg_order),
+        "by_month": by_month,
+        "by_category": by_category[:5],
+    }
 
 
 @router.get("/{user_id}", response_model=List[OrderOut])

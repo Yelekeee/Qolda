@@ -2,11 +2,16 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 import logging
 
 from database import engine, SessionLocal, Base, migrate_db
 import models  # noqa: F401 — registers all tables
+from limiter import limiter
 from routers import auth, products, recommendations, orders, reviews, admin, seller, ai, delivery, messages
+from routers import wishlist, cart, notifications, promo
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,14 +19,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create all tables then run safe column migrations
     Base.metadata.create_all(bind=engine)
     migrate_db()
     logger.info("Database tables created/verified")
 
     db = SessionLocal()
     try:
-        # Auto-seed if database is empty (first deployment)
         from models import Product as ProductModel
         if db.query(ProductModel).count() == 0:
             logger.info("Empty database — running seed data...")
@@ -32,7 +35,6 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning(f"Auto-seed failed: {e}")
 
-        # Load or train ML model
         try:
             from ml.trainer import load_or_train
             load_or_train(db)
@@ -48,7 +50,7 @@ async def lifespan(app: FastAPI):
 _cors_env = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
 if _cors_env.strip() == "*":
     _origins = ["*"]
-    _credentials = False          # browser blocks credentials with wildcard origin
+    _credentials = False
 else:
     _origins = [o.strip() for o in _cors_env.split(",")]
     _credentials = True
@@ -60,6 +62,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── Rate Limiting ──────────────────────────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
@@ -68,18 +75,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(products.router, prefix="/api/products", tags=["products"])
-app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
-app.include_router(orders.router, prefix="/api/orders", tags=["orders"])
-app.include_router(reviews.router, prefix="/api/reviews", tags=["reviews"])
-app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-app.include_router(seller.router, prefix="/api/seller", tags=["seller"])
-app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
-app.include_router(delivery.router, prefix="/api/delivery-services", tags=["delivery"])
-app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
+app.include_router(auth.router,            prefix="/api/auth",             tags=["auth"])
+app.include_router(products.router,        prefix="/api/products",         tags=["products"])
+app.include_router(recommendations.router, prefix="/api/recommendations",  tags=["recommendations"])
+app.include_router(orders.router,          prefix="/api/orders",           tags=["orders"])
+app.include_router(reviews.router,         prefix="/api/reviews",          tags=["reviews"])
+app.include_router(admin.router,           prefix="/api/admin",            tags=["admin"])
+app.include_router(seller.router,          prefix="/api/seller",           tags=["seller"])
+app.include_router(ai.router,              prefix="/api/ai",               tags=["ai"])
+app.include_router(delivery.router,        prefix="/api/delivery-services", tags=["delivery"])
+app.include_router(messages.router,        prefix="/api/messages",         tags=["messages"])
+app.include_router(wishlist.router,        prefix="/api/wishlist",         tags=["wishlist"])
+app.include_router(cart.router,            prefix="/api/cart",             tags=["cart"])
+app.include_router(notifications.router,   prefix="/api/notifications",    tags=["notifications"])
+app.include_router(promo.router,           prefix="/api/promo",            tags=["promo"])
 
 
 @app.get("/")
 def root():
     return {"message": "QOLDA API is running", "docs": "/docs"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}

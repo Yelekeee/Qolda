@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import Header from './components/Header'
 import Footer from './components/Footer'
@@ -25,7 +26,10 @@ import SellerAI from './pages/seller/SellerAI'
 import SellerWarehouse from './pages/seller/SellerWarehouse'
 import SellerChat from './pages/seller/SellerChat'
 import SellerSettings from './pages/seller/SellerSettings'
+import BuyerChat from './pages/BuyerChat'
 import { useUserStore } from './store/userStore'
+import { useWishlistStore } from './store/wishlistStore'
+import { useCartStore } from './store/cartStore'
 
 function AuthLayout() {
   const user = useUserStore(s => s.user)
@@ -51,6 +55,21 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const user = useUserStore(s => s.user)
   if (!user?.is_admin) return <Navigate to="/" replace />
   return <>{children}</>
+}
+
+function BackendSync() {
+  const userId = useUserStore(s => s.user?.id)
+  const loadWishlist = useWishlistStore(s => s.loadFromBackend)
+  const loadCart = useCartStore(s => s.loadFromBackend)
+
+  useEffect(() => {
+    if (userId) {
+      loadWishlist()
+      loadCart()
+    }
+  }, [userId, loadWishlist, loadCart])
+
+  return null
 }
 
 export default function App() {
@@ -88,6 +107,7 @@ export default function App() {
           <Route path="/orders"         element={<Orders />} />
           <Route path="/profile"        element={<Profile />} />
           <Route path="/favorites"      element={<Favorites />} />
+          <Route path="/chat/:sellerId" element={<BuyerChat />} />
           <Route path="/admin"          element={<AdminRoute><Admin /></AdminRoute>} />
         </Route>
 
@@ -95,6 +115,7 @@ export default function App() {
       </Routes>
 
       {/* Global overlays */}
+      <BackendSync />
       <Toasts />
       <ConfirmDialog />
     </BrowserRouter>

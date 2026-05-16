@@ -6,8 +6,8 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from database import get_db
-from models import Message, User
-from auth import require_seller
+from models import Message, Notification, User
+from auth import require_user
 
 router = APIRouter()
 
@@ -24,10 +24,11 @@ class MessageOut(BaseModel):
     model_config = {"from_attributes": False}
 
 
-class SellerOut(BaseModel):
+class ContactOut(BaseModel):
     id: int
     name: str
     email: str
+    is_seller: bool
     unread_count: int
 
 
@@ -40,10 +41,22 @@ def _fmt(dt: datetime) -> str:
     return dt.isoformat()
 
 
-@router.get("/sellers", response_model=List[SellerOut])
+@router.get("/user-info/{user_id}")
+def get_user_info(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_user),
+):
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"id": u.id, "name": u.name, "is_seller": u.is_seller}
+
+
+@router.get("/sellers", response_model=List[ContactOut])
 def get_sellers(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_seller),
+    current_user: User = Depends(require_user),
 ):
     sellers = db.query(User).filter(
         User.is_seller == True,
@@ -57,7 +70,7 @@ def get_sellers(
             Message.receiver_id == current_user.id,
             Message.is_read == False,
         ).count()
-        result.append(SellerOut(id=s.id, name=s.name, email=s.email, unread_count=unread))
+        result.append(ContactOut(id=s.id, name=s.name, email=s.email, is_seller=True, unread_count=unread))
     return result
 
 
@@ -65,7 +78,7 @@ def get_sellers(
 def get_conversation(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_seller),
+    current_user: User = Depends(require_user),
 ):
     msgs = (
         db.query(Message)
@@ -79,7 +92,6 @@ def get_conversation(
         .all()
     )
 
-    # Mark incoming as read
     for m in msgs:
         if m.receiver_id == current_user.id and not m.is_read:
             m.is_read = True
@@ -103,7 +115,7 @@ def get_conversation(
 def send_message(
     data: SendMessage,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_seller),
+    current_user: User = Depends(require_user),
 ):
     if not data.text.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
@@ -118,6 +130,16 @@ def send_message(
         text=data.text.strip(),
     )
     db.add(msg)
+
+    notif = Notification(
+        user_id=data.receiver_id,
+        title=f"Жаңа хабарлама / Новое сообщение от {current_user.name}",
+        body=data.text.strip()[:100],
+        type="message",
+        link=f"/chat/{current_user.id}",
+    )
+    db.add(notif)
+
     db.commit()
     db.refresh(msg)
 
@@ -135,7 +157,7 @@ def send_message(
 @router.get("/unread-count")
 def unread_count(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_seller),
+    current_user: User = Depends(require_user),
 ):
     count = db.query(Message).filter(
         Message.receiver_id == current_user.id,

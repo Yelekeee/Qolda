@@ -1,8 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingCart, Trash2, ArrowRight, ShoppingBag } from 'lucide-react'
+import { ShoppingCart, Trash2, ArrowRight, ShoppingBag, Truck } from 'lucide-react'
 import { useCartStore } from '../store/cartStore'
 import { useUserStore } from '../store/userStore'
 import ProductImage from '../components/ProductImage'
+
+const FREE_SHIPPING_THRESHOLD = 5000
 
 function formatPrice(n: number) {
   return n.toLocaleString('ru-KZ') + ' ₸'
@@ -12,6 +14,11 @@ export default function Cart() {
   const { items, removeItem, updateQuantity, total, count } = useCartStore()
   const user     = useUserStore(s => s.user)
   const navigate = useNavigate()
+
+  const cartTotal = total()
+  const remaining = Math.max(0, FREE_SHIPPING_THRESHOLD - cartTotal)
+  const progress  = Math.min(100, (cartTotal / FREE_SHIPPING_THRESHOLD) * 100)
+  const freeShipping = cartTotal >= FREE_SHIPPING_THRESHOLD
 
   if (items.length === 0) {
     return (
@@ -104,34 +111,57 @@ export default function Cart() {
 
         {/* Summary */}
         <div className="w-full lg:w-72">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sticky top-24">
-            <h3 className="font-bold text-gray-900 mb-4">Жиынтық / Итого</h3>
-            <div className="space-y-2.5 text-sm mb-5">
-              <div className="flex justify-between text-gray-600">
-                <span>Тауарлар ({count()}):</span>
-                <span className="font-medium text-gray-900">{formatPrice(total())}</span>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sticky top-24 space-y-4">
+
+            {/* Free shipping progress */}
+            <div className={`rounded-xl p-3.5 ${freeShipping ? 'bg-emerald-50 border border-emerald-100' : 'bg-[#004B57]/5 border border-[#004B57]/10'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Truck size={14} className={freeShipping ? 'text-emerald-600' : 'text-[#004B57]'} />
+                <p className={`text-xs font-semibold ${freeShipping ? 'text-emerald-700' : 'text-[#004B57]'}`}>
+                  {freeShipping
+                    ? 'Бесплатная доставка!'
+                    : `Ещё ${formatPrice(remaining)} до бесплатной доставки`}
+                </p>
               </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Жеткізу / Доставка:</span>
-                <span className="text-green-600 font-medium">Оформлении</span>
-              </div>
-              <div className="border-t border-gray-100 pt-2.5 flex justify-between font-bold text-base">
-                <span className="text-gray-900">Барлығы / Итого:</span>
-                <span className="text-[#004B57]">{formatPrice(total())}</span>
+              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${freeShipping ? 'bg-emerald-500' : 'bg-[#004B57]'}`}
+                  style={{ width: `${progress}%` }}
+                />
               </div>
             </div>
-            <button
-              onClick={() => user ? navigate('/checkout') : navigate('/login')}
-              className="w-full flex items-center justify-center gap-2 bg-[#004B57] hover:bg-[#003840] text-white font-semibold py-3 rounded-xl transition-colors"
-            >
-              {user ? 'Тапсырыс беру' : 'Кіру қажет'}
-              <ArrowRight size={16} />
-            </button>
-            {!user && (
-              <p className="text-xs text-center text-gray-400 mt-2">
-                Тапсырыс беру үшін кіріңіз
-              </p>
-            )}
+
+            <div>
+              <h3 className="font-bold text-gray-900 mb-3">Жиынтық / Итого</h3>
+              <div className="space-y-2.5 text-sm mb-5">
+                <div className="flex justify-between text-gray-500">
+                  <span>Тауарлар ({count()}):</span>
+                  <span className="font-medium text-gray-900">{formatPrice(cartTotal)}</span>
+                </div>
+                <div className="flex justify-between text-gray-500">
+                  <span>Жеткізу / Доставка:</span>
+                  <span className={`font-medium ${freeShipping ? 'text-emerald-600' : 'text-gray-400'}`}>
+                    {freeShipping ? 'Бесплатно' : 'Оформлении'}
+                  </span>
+                </div>
+                <div className="border-t border-gray-100 pt-2.5 flex justify-between font-bold text-base">
+                  <span className="text-gray-900">Барлығы / Итого:</span>
+                  <span className="text-[#004B57]">{formatPrice(cartTotal)}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => user ? navigate('/checkout') : navigate('/login')}
+                className="w-full flex items-center justify-center gap-2 bg-[#004B57] hover:bg-[#003840] text-white font-semibold py-3 rounded-xl transition-colors"
+              >
+                {user ? 'Тапсырыс беру' : 'Кіру қажет'}
+                <ArrowRight size={16} />
+              </button>
+              {!user && (
+                <p className="text-xs text-center text-gray-400 mt-2">
+                  Тапсырыс беру үшін кіріңіз
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>

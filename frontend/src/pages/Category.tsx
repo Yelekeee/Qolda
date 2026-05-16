@@ -5,6 +5,47 @@ import ProductCard from '../components/ProductCard'
 import { productsApi } from '../api/products'
 import type { Product } from '../api/types'
 
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: (number | '...')[] = [1]
+  if (current > 3) pages.push('...')
+  for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p++) pages.push(p)
+  if (current < total - 2) pages.push('...')
+  pages.push(total)
+  return pages
+}
+
+function Pagination({ current, total, onChange }: { current: number; total: number; onChange: (p: number) => void }) {
+  const btnBase = 'w-9 h-9 rounded-lg text-sm font-medium transition-colors flex items-center justify-center'
+  const inactive = 'bg-white border border-gray-200 text-gray-600 hover:border-[#004B57] hover:text-[#004B57]'
+  const active   = 'bg-[#004B57] text-white shadow-sm'
+  const disabled = 'opacity-40 cursor-not-allowed'
+
+  return (
+    <div className="flex justify-center items-center gap-1.5 mt-10">
+      <button
+        onClick={() => onChange(current - 1)}
+        disabled={current === 1}
+        className={`px-3 h-9 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:border-gray-300 transition-colors ${current === 1 ? disabled : ''}`}
+      >
+        ←
+      </button>
+      {getPageNumbers(current, total).map((p, i) =>
+        p === '...'
+          ? <span key={`e${i}`} className="w-9 h-9 flex items-center justify-center text-gray-400 text-sm">…</span>
+          : <button key={p} onClick={() => onChange(p)} className={`${btnBase} ${p === current ? active : inactive}`}>{p}</button>
+      )}
+      <button
+        onClick={() => onChange(current + 1)}
+        disabled={current === total}
+        className={`px-3 h-9 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:border-gray-300 transition-colors ${current === total ? disabled : ''}`}
+      >
+        →
+      </button>
+    </div>
+  )
+}
+
 const SORT_OPTIONS = [
   { value: 'newest',     label: 'Жаңа / Новые' },
   { value: 'popular',    label: 'Танымал / Популярные' },
@@ -184,35 +225,7 @@ export default function Category() {
 
           {/* Pagination */}
           {pages > 1 && (
-            <div className="flex justify-center gap-2 mt-10">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                ←
-              </button>
-              {Array.from({ length: pages }, (_, i) => i + 1).map(p => (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
-                    p === page
-                      ? 'bg-[#004B57] text-white shadow-sm'
-                      : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-              <button
-                onClick={() => setPage(p => Math.min(pages, p + 1))}
-                disabled={page === pages}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                →
-              </button>
-            </div>
+            <Pagination current={page} total={pages} onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
           )}
         </div>
       </div>

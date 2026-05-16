@@ -29,4 +29,7 @@ export const messagesApi = {
 
   unreadCount: () =>
     client.get<{ count: number }>('/messages/unread-count').then(r => r.data.count),
+
+  getUserInfo: (userId: number) =>
+    client.get<{ id: number; name: string; is_seller: boolean }>(`/messages/user-info/${userId}`).then(r => r.data),
 }
