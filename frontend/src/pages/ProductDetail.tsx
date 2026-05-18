@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ShoppingCart, ChevronLeft, Star, Package, Heart } from 'lucide-react'
+import { ShoppingCart, ChevronLeft, Star, Package, Heart, MessageCircle } from 'lucide-react'
 import type { Product, Review, Recommendation } from '../api/types'
 import { productsApi } from '../api/products'
 import { reviewsApi } from '../api/reviews'
@@ -239,6 +239,17 @@ export default function ProductDetail() {
               <Heart size={18} className={wished ? 'fill-red-500' : ''} />
             </button>
           </div>
+
+          {/* Chat with seller */}
+          {product.seller_id && !user?.is_seller && (
+            <button
+              onClick={() => navigate(`/chat/${product.seller_id}`, { state: { sellerName: 'Продавец' } })}
+              className="mt-3 flex items-center gap-2 text-sm text-[#004B57] hover:text-[#003840] font-medium border border-[#004B57]/20 hover:border-[#004B57]/50 rounded-xl px-4 py-2.5 transition-colors w-full justify-center"
+            >
+              <MessageCircle size={15} />
+              Продавцыға жазу / Написать продавцу
+            </button>
+          )}
         </div>
       </div>
 

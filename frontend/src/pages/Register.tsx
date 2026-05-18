@@ -4,6 +4,17 @@ import { Eye, EyeOff, Store, User, CheckCircle } from 'lucide-react'
 import { authApi } from '../api/auth'
 import { useUserStore } from '../store/userStore'
 
+function getPasswordStrength(pw: string): { level: 0 | 1 | 2 | 3; label: string; color: string } {
+  if (!pw) return { level: 0, label: '', color: '' }
+  let score = 0
+  if (pw.length >= 8) score++
+  if (/[0-9]/.test(pw)) score++
+  if (/[^a-zA-Z0-9]/.test(pw) || /[A-Z]/.test(pw)) score++
+  if (score === 1) return { level: 1, label: 'Әлсіз / Слабый', color: 'bg-red-500' }
+  if (score === 2) return { level: 2, label: 'Орташа / Средний', color: 'bg-amber-400' }
+  return { level: 3, label: 'Күшті / Надёжный', color: 'bg-emerald-500' }
+}
+
 export default function Register() {
   const [name, setName]           = useState('')
   const [email, setEmail]         = useState('')
@@ -16,6 +27,9 @@ export default function Register() {
   const [loading, setLoading]     = useState(false)
   const setAuth  = useUserStore(s => s.setAuth)
   const navigate = useNavigate()
+
+  const pwStrength = getPasswordStrength(password)
+  const confirmMatch = confirm.length > 0 && confirm === password
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,36 +108,27 @@ export default function Register() {
 
           {/* Account type toggle */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <button
-              type="button"
-              onClick={() => setIsSeller(false)}
-              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                !isSeller
-                  ? 'border-[#004B57] bg-[#004B57]/5 text-[#004B57]'
-                  : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-              }`}
-            >
-              <User size={22} />
-              <div className="text-center">
-                <p className="text-sm font-semibold leading-tight">Покупатель</p>
-                <p className="text-xs opacity-70 mt-0.5">Сатып алушы</p>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsSeller(true)}
-              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                isSeller
-                  ? 'border-[#004B57] bg-[#004B57]/5 text-[#004B57]'
-                  : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-              }`}
-            >
-              <Store size={22} />
-              <div className="text-center">
-                <p className="text-sm font-semibold leading-tight">Продавец</p>
-                <p className="text-xs opacity-70 mt-0.5">Сатушы</p>
-              </div>
-            </button>
+            {[
+              { seller: false, icon: User,  label: 'Покупатель', sub: 'Сатып алушы' },
+              { seller: true,  icon: Store, label: 'Продавец',   sub: 'Сатушы'      },
+            ].map(({ seller, icon: Icon, label, sub }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setIsSeller(seller)}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                  isSeller === seller
+                    ? 'border-[#004B57] bg-[#004B57]/5 text-[#004B57]'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                <Icon size={22} />
+                <div className="text-center">
+                  <p className="text-sm font-semibold leading-tight">{label}</p>
+                  <p className="text-xs opacity-70 mt-0.5">{sub}</p>
+                </div>
+              </button>
+            ))}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -174,6 +179,29 @@ export default function Register() {
                   {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
+
+              {/* Password strength meter */}
+              {password.length > 0 && (
+                <div className="mt-2">
+                  <div className="flex gap-1 mb-1">
+                    {[1, 2, 3].map(i => (
+                      <div
+                        key={i}
+                        className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                          i <= pwStrength.level ? pwStrength.color : 'bg-gray-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className={`text-xs font-medium ${
+                    pwStrength.level === 1 ? 'text-red-500' :
+                    pwStrength.level === 2 ? 'text-amber-500' :
+                    'text-emerald-600'
+                  }`}>
+                    {pwStrength.label}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>
@@ -184,7 +212,13 @@ export default function Register() {
                 <input
                   type={showCf ? 'text' : 'password'}
                   required
-                  className="input pr-10"
+                  className={`input pr-10 ${
+                    confirm.length > 0
+                      ? confirmMatch
+                        ? 'border-emerald-400 focus:ring-emerald-200'
+                        : 'border-red-400 focus:ring-red-200'
+                      : ''
+                  }`}
                   value={confirm}
                   onChange={e => setConfirm(e.target.value)}
                   placeholder="••••••••"
@@ -198,6 +232,11 @@ export default function Register() {
                   {showCf ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
+              {confirm.length > 0 && (
+                <p className={`text-xs mt-1 ${confirmMatch ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {confirmMatch ? '✓ Пароли совпадают' : '✗ Пароли не совпадают'}
+                </p>
+              )}
             </div>
 
             {error && (
@@ -209,13 +248,14 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-[#004B57] hover:bg-[#003840] text-white font-semibold rounded-xl transition-colors disabled:opacity-60"
+              className="w-full py-2.5 bg-[#004B57] hover:bg-[#003840] text-white font-semibold rounded-xl transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
             >
-              {loading
-                ? 'Тіркелуде...'
-                : isSeller
-                ? 'Сатушы ретінде тіркелу'
-                : 'Тіркелу / Зарегистрироваться'}
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  Тіркелуде...
+                </>
+              ) : isSeller ? 'Сатушы ретінде тіркелу' : 'Тіркелу / Зарегистрироваться'}
             </button>
           </form>
 

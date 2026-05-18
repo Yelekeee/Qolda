@@ -60,6 +60,20 @@ class ProductCreate(BaseModel):
     stock: int = 100
 
 
+class ProductUpdate(BaseModel):
+    name_ru: Optional[str] = None
+    name_kz: Optional[str] = None
+    description_ru: Optional[str] = None
+    description_kz: Optional[str] = None
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    tags: Optional[str] = None
+    price: Optional[float] = None
+    discount_price: Optional[float] = None
+    image_url: Optional[str] = None
+    stock: Optional[int] = None
+
+
 class ProductOut(BaseModel):
     id: int
     name_kz: str
@@ -134,6 +148,7 @@ class OrderCreate(BaseModel):
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
     delivery_service_id: Optional[int] = None
+    promo_code: Optional[str] = None
 
 
 class OrderItemOut(BaseModel):
@@ -238,6 +253,88 @@ class ClickLog(BaseModel):
     user_id: int
     product_id: int
     method: str
+
+
+# ── Wishlist ──────────────────────────────────────────────────────────────────
+
+class WishlistItemOut(BaseModel):
+    product_id: int
+    product: "ProductOut"
+    added_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class WishlistOut(BaseModel):
+    items: List[WishlistItemOut]
+    total: int
+
+
+# ── Cart ──────────────────────────────────────────────────────────────────────
+
+class CartQuantity(BaseModel):
+    quantity: int
+
+
+class CartItemOut(BaseModel):
+    product_id: int
+    quantity: int
+    product: "ProductOut"
+
+    model_config = {"from_attributes": True}
+
+
+class CartOut(BaseModel):
+    items: List[CartItemOut]
+    total: int
+
+
+# ── Promo Codes ───────────────────────────────────────────────────────────────
+
+class PromoValidate(BaseModel):
+    code: str
+    order_total: float
+
+
+class PromoResult(BaseModel):
+    valid: bool
+    discount_percent: int = 0
+    discount_amount: float = 0.0
+    message: str = ""
+
+
+class PromoCodeCreate(BaseModel):
+    code: str
+    discount_percent: int
+    max_uses: Optional[int] = None
+    expires_at: Optional[datetime] = None
+
+
+class PromoCodeOut(BaseModel):
+    id: int
+    code: str
+    discount_percent: int
+    is_active: bool
+    max_uses: Optional[int] = None
+    used_count: int
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+
+class NotificationOut(BaseModel):
+    id: int
+    title: str
+    body: str
+    type: str
+    is_read: bool
+    link: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────

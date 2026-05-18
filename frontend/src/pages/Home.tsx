@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Truck, ShieldCheck, RotateCcw, Headphones, TrendingUp, Zap } from 'lucide-react'
+import { Truck, ShieldCheck, RotateCcw, Headphones, TrendingUp, Zap, Clock } from 'lucide-react'
 import ProductCard from '../components/ProductCard'
 import RecommendationCard from '../components/RecommendationCard'
 import CategoryGrid from '../components/CategoryGrid'
@@ -18,16 +18,24 @@ const TRUST = [
 
 export default function Home() {
   const user = useUserStore(s => s.user)
-  const [popular, setPopular]   = useState<Product[]>([])
-  const [recs, setRecs]         = useState<Recommendation[]>([])
-  const [loading, setLoading]   = useState(true)
+  const [popular, setPopular]         = useState<Product[]>([])
+  const [recs, setRecs]               = useState<Recommendation[]>([])
+  const [recentlyViewed, setRecently] = useState<Product[]>([])
+  const [loading, setLoading]         = useState(true)
 
   useEffect(() => {
-    Promise.all([
+    const requests: Promise<unknown>[] = [
       productsApi.list({ sort: 'popular', limit: 8 }),
       user ? recsApi.forUser(user.id, 8) : recsApi.popular(8),
-    ])
-      .then(([popRes, recsRes]) => { setPopular(popRes.items); setRecs(recsRes) })
+    ]
+    if (user) requests.push(productsApi.recentlyViewed(6))
+
+    Promise.all(requests)
+      .then(([popRes, recsRes, recentRes]) => {
+        setPopular((popRes as { items: Product[] }).items)
+        setRecs(recsRes as Recommendation[])
+        if (recentRes) setRecently(recentRes as Product[])
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [user])
@@ -106,6 +114,26 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 py-10">
         {/* Categories */}
         <CategoryGrid />
+
+        {/* Recently Viewed */}
+        {user && recentlyViewed.length > 0 && (
+          <section className="py-10">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
+                  <Clock size={15} className="text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Жақында қараған</h2>
+                  <p className="text-sm text-gray-400 mt-0.5">Недавно просмотренные</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {recentlyViewed.map(p => <ProductCard key={p.id} product={p} />)}
+            </div>
+          </section>
+        )}
 
         {/* Popular Products */}
         <section className="py-10">

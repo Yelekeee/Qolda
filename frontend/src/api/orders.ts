@@ -8,9 +8,10 @@ export const ordersApi = {
     customer_name?: string,
     customer_phone?: string,
     delivery_service_id?: number,
+    promo_code?: string,
   ) =>
     client
-      .post<Order>('/orders', { items, delivery_address, customer_name, customer_phone, delivery_service_id })
+      .post<Order>('/orders', { items, delivery_address, customer_name, customer_phone, delivery_service_id, promo_code })
       .then(r => r.data),
 
   getUserOrders: (userId: number) =>
@@ -27,4 +28,16 @@ export const ordersApi = {
 
   cancelOrder: (orderId: number) =>
     client.post<Order>(`/orders/${orderId}/cancel`).then(r => r.data),
+
+  returnOrder: (orderId: number) =>
+    client.post<Order>(`/orders/${orderId}/return`).then(r => r.data),
+
+  getMyStats: () =>
+    client.get<{
+      total_orders: number
+      total_spent: number
+      avg_order: number
+      by_month: { name: string; spent: number }[]
+      by_category: { name: string; count: number; spent: number }[]
+    }>('/orders/my-stats').then(r => r.data),
 }

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, cast, Integer
 from typing import List
 
 from database import get_db
@@ -128,3 +128,50 @@ def log_click(data: ClickLog, db: Session = Depends(get_db)):
         log.clicked = True
         db.commit()
     return {"ok": True}
+
+
+@router.get("/analytics")
+def recommendations_analytics(db: Session = Depends(get_db)):
+    total_shown = db.query(func.count(RecommendationLog.id)).scalar() or 0
+    total_clicked = db.query(func.sum(cast(RecommendationLog.clicked, Integer))).scalar() or 0
+    ctr = round(total_clicked / total_shown * 100, 1) if total_shown else 0.0
+
+    by_method_rows = (
+        db.query(
+            RecommendationLog.method,
+            func.count(RecommendationLog.id).label("shown"),
+            func.sum(cast(RecommendationLog.clicked, Integer)).label("clicked"),
+        )
+        .group_by(RecommendationLog.method)
+        .all()
+    )
+    by_method = [
+        {
+            "method": row[0],
+            "shown": int(row[1]),
+            "clicked": int(row[2] or 0),
+            "ctr": round(int(row[2] or 0) / int(row[1]) * 100, 1) if row[1] else 0.0,
+        }
+        for row in by_method_rows
+    ]
+
+    model_meta = {}
+    try:
+        from ml.trainer import get_model_meta
+        model_meta = get_model_meta() or {}
+    except Exception:
+        pass
+
+    return {
+        "total_shown": total_shown,
+        "total_clicked": total_clicked,
+        "ctr_percent": ctr,
+        "by_method": by_method,
+        "model_info": {
+            "last_trained_at": model_meta.get("last_trained_at"),
+            "num_products": model_meta.get("num_products"),
+            "num_users": model_meta.get("num_users"),
+            "num_ratings": model_meta.get("num_ratings"),
+            "collab_available": model_meta.get("collab_available"),
+        },
+    }
