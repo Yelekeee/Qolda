@@ -68,3 +68,58 @@ def get_product_reviews(product_id: int, db: Session = Depends(get_db)):
             out.user_name = r.user.name
         result.append(out)
     return result
+
+
+def _recalc_rating(product_id: int, db: Session):
+    reviews = db.query(Review).filter(Review.product_id == product_id).all()
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if product:
+        product.avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 2) if reviews else 0.0
+        product.review_count = len(reviews)
+
+
+@router.put("/{review_id}", response_model=ReviewOut)
+def update_review(
+    review_id: int,
+    data: ReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    if review.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if not 1 <= data.rating <= 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+
+    review.rating = data.rating
+    review.text = data.text
+    db.flush()
+    _recalc_rating(review.product_id, db)
+    db.commit()
+    db.refresh(review)
+
+    out = ReviewOut.model_validate(review)
+    out.user_name = current_user.name
+    return out
+
+
+@router.delete("/{review_id}")
+def delete_review(
+    review_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    if review.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    product_id = review.product_id
+    db.delete(review)
+    db.flush()
+    _recalc_rating(product_id, db)
+    db.commit()
+    return {"ok": True}

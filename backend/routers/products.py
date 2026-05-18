@@ -295,6 +295,29 @@ def update_product(
     return ProductOut.model_validate(product)
 
 
+@router.patch("/{product_id}/stock", response_model=ProductOut)
+def update_stock(
+    product_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_seller),
+):
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if product.seller_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="You don't own this product")
+
+    stock = data.get("stock")
+    if stock is None or not isinstance(stock, int) or stock < 0:
+        raise HTTPException(status_code=400, detail="stock must be a non-negative integer")
+
+    product.stock = stock
+    db.commit()
+    db.refresh(product)
+    return ProductOut.model_validate(product)
+
+
 @router.delete("/{product_id}")
 def delete_product(
     product_id: int,

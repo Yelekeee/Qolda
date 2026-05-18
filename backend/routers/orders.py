@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 from collections import defaultdict
 
@@ -22,7 +22,7 @@ STATUS_LABELS = {
 }
 
 
-def _notify(db: Session, user_id: int, title: str, body: str, notif_type: str, link: str | None = None):
+def _notify(db: Session, user_id: int, title: str, body: str, notif_type: str, link: Optional[str] = None):
     db.add(Notification(user_id=user_id, title=title, body=body, type=notif_type, link=link))
 
 
@@ -112,6 +112,7 @@ def create_order(
 
 @router.get("/seller", response_model=List[SellerOrderOut])
 def get_seller_orders(
+    status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_seller),
 ):
@@ -130,12 +131,10 @@ def get_seller_orders(
     )
     order_ids = [r[0] for r in order_id_rows]
 
-    orders = (
-        db.query(Order)
-        .filter(Order.id.in_(order_ids))
-        .order_by(Order.created_at.desc())
-        .all()
-    )
+    query = db.query(Order).filter(Order.id.in_(order_ids))
+    if status:
+        query = query.filter(Order.status == status)
+    orders = query.order_by(Order.created_at.desc()).all()
 
     result = []
     for order in orders:
