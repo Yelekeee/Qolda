@@ -93,6 +93,14 @@ function OrderProgress({ status }: { status: string }) {
   )
 }
 
+function formatDateTime(iso: string) {
+  const d = new Date(iso)
+  return d.toLocaleString('ru-RU', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
 export default function Orders() {
   const user     = useUserStore(s => s.user)
   const addItem  = useCartStore(s => s.addItem)
