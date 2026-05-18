@@ -41,11 +41,6 @@ export default function Profile() {
   const [email, setEmail]     = useState(user?.email ?? '')
   const [saving, setSaving]   = useState(false)
 
-  const [editing, setEditing]   = useState(false)
-  const [name, setName]         = useState(user?.name ?? '')
-  const [email, setEmail]       = useState(user?.email ?? '')
-  const [saving, setSaving]     = useState(false)
-
   useEffect(() => {
     if (!user) return
     setName(user.name)

@@ -36,19 +36,6 @@ def get_seller_stats(
         revenue_by_week=[RevenuePoint(name=f'Нед {i+1}', revenue=0) for i in range(4)],
     )
 
-    empty = SellerStats(
-        total_products=total_products,
-        total_orders=0,
-        total_revenue=0.0,
-        month_revenue=0.0,
-        prev_month_revenue=0.0,
-        cancelled_orders=0,
-        returned_orders=0,
-        low_stock_count=sum(1 for p in seller_products if 0 < p.stock <= 10),
-        revenue_by_day=[RevenuePoint(name=n, revenue=0) for n in DAY_NAMES],
-        revenue_by_week=[RevenuePoint(name=f'Нед {i+1}', revenue=0) for i in range(4)],
-    )
-
     if not seller_product_ids:
         return empty
 
